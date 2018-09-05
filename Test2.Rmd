@@ -1,0 +1,233 @@
+---
+title: "Test 2 Caroline McCadden"
+output:
+  html_document:
+    df_print: paged
+---
+
+In this project I will predict the weight of a person based on various skeletal measurements. Several decision tree techniques are examined and compared, and then also compared to an alternative KNN model.
+
+##We begin by initializing the data. 
+```{r}
+#libraries
+library(rpart.plot)
+library(data.table)
+library(MASS)
+library(dplyr)
+library(tree)
+library(class)
+#loading data set and renaming variables
+mydat <- fread('http://ww2.amstat.org/publications/jse/datasets/body.dat.txt')
+mydat <- rename(mydat, biacromial_diam = V1,
+                biiliac_diam = V2, 
+                bitrochanteric_diam  = V3, 
+                chest_depth = V4,
+                chest_diam = V5,
+                elbow_diam=V6,
+                wrist_diam = V7,
+                knee_diam = V8,
+                ankle_diam = V9,
+                shoulder_girth = V10,
+                chest_girth = V11,
+                waist_girth = V12,
+                navel_girth = V13,
+                hip_girth = V14,
+                thigh_girth = V15,
+                bicep_girth = V16,
+                forearm_girth = V17,
+                knee_girth = V18,
+                calf_girth.max = V19,
+                ankle_girth.min = V20,
+                wrist_girth.min = V21,
+                age = V22,
+                weight = V23,
+                height = V24,
+                gender = V25)
+
+#Subset of just skeletal variables
+skeletal<-mydat[,-c(10:21)]
+```
+
+##We then explore the data by plotting every possible explanatory variable with weight as the dependent variable
+```{r}
+#plotting height as a predictive variable for weight with gender distinction
+plot(weight~height,data=skeletal,
+     xlab="Height (cm)",
+     ylab = "Weigh (kg)",
+     main="Relationship between Weight and Height",
+     col=ifelse(gender==1,"red","blue"))
+legend(148, 117, legend=c("Male", "Female"),
+       col=c("red", "blue"), lty=1:2, cex=0.8)
+
+#plotting gender as a predictive variable for weight
+boxplot(weight~gender,data=skeletal,
+        xlab="Gender",
+        ylab="Weight (kg)",
+        main="Distribution of Weight based on Gender",
+        names=c("Female","Male"))
+
+#plotting age as a predictive variable for weight
+plot(weight~age,data=skeletal,
+     xlab="Age (years)",
+     ylab = "Weight (kg)",
+     main="Relationship Between Weight and Age")
+
+#plotting the various bone measurements as predictive variables for weight
+plot(weight~biacromial_diam,data=skeletal,xlim=c(0, max(skeletal$biacromial_diam, skeletal$biiliac_diam)),ylim = c(min(skeletal$weight),max(skeletal$weight)),
+     xlab="Measurement (cm)",
+     ylab = "Weight (kg)",
+     main="Relationship Between Weight and Skeletal Measurements")
+abline(lm(weight~biacromial_diam,data=skeletal),ylim=c(50,110))
+lines(weight~biiliac_diam,data=skeletal,type="o",lty = 0,col="red")
+abline(lm(weight~biiliac_diam,data=skeletal),col="red")
+lines(weight~bitrochanteric_diam,data=skeletal,type="o",lty = 0,col="green")
+abline(lm(weight~bitrochanteric_diam,data=skeletal),col="green")
+lines(weight~chest_depth,data=skeletal,type="o",lty = 0,col="pink")
+abline(lm(weight~chest_depth,data=skeletal),col="pink")
+lines(weight~chest_diam,data=skeletal,type="o",lty = 0,col="lightblue")
+abline(lm(weight~chest_diam,data=skeletal),col="lightblue")
+lines(weight~elbow_diam,data=skeletal,type="o",lty = 0,col="orange")
+abline(lm(weight~elbow_diam,data=skeletal),col="orange")
+lines(weight~wrist_diam,data=skeletal,type="o",lty = 0,col="purple")
+abline(lm(weight~wrist_diam,data=skeletal),col="purple")
+lines(weight~knee_diam,data=skeletal,type="o",lty = 0,col="yellow")
+abline(lm(weight~knee_diam,data=skeletal),col="yellow")
+lines(weight~ankle_diam,data=skeletal,type="o",lty = 0,col="darkgreen")
+abline(lm(weight~ankle_diam,data=skeletal),col="darkgreen")
+legend(0, 117, legend=c("Biiliac Diameter", "Bitrochanteric Diameter","Chest Depth","Chest Diameter","Elbow Diameter","Wrist Diameter","Knee Diameter","Ankle Diameter"),
+       col=c("black", "red","green","pink","lightblue","orange","purple","yellow","darkgreen"), lty=1:2, cex=0.8)
+```
+
+##We then initialize training and test subsets as well as a subset with only the skeletal variables as preparation for running tests
+```{r}
+set.seed(1)
+#creates vector for the subset of rows used to get subset of training data
+train_rows<-sample(1:nrow(skeletal),round(nrow(skeletal)/2))
+#creates data frame of training data
+skeletal.train<-skeletal[train_rows,] 
+#creates dataframe of test data
+skeletal.test<-skeletal[-train_rows,]
+#creates vector of actual weights of training data
+Weight.train<-skeletal.train$weight 
+#creates vector of actual weights of test data
+Weight.test<-skeletal.test$weight 
+```
+
+##Running the decision tree using all of the objectively observable data (e.g. age left out because it is inferred)
+```{r}
+#runs decision tree on skeletal variables to predict weight using training data
+tree.skeletal=tree(weight ~ .,skeletal.train[,-c(10,13)]) 
+#summary of tree (deviance is sum of squared errors for regression)
+summary(tree.skeletal)
+#turns tree into an rpart for the purpose of plotting
+tree.skeletal2 <- rpart(tree.skeletal)
+#note only 5 variables have been used in tree
+
+skeletal.train[,-c(10,13)]
+#plots tree
+prp(tree.skeletal2, roundint = FALSE) 
+```
+
+##Using the decision tree to predict the true weights
+```{r}
+tree.pred=predict(tree.skeletal,newdata=skeletal.test)
+#show test results in plot (actual vs predicted value)
+plot(tree.pred,Weight.test, xlab = "Weight Prediction", ylab = "True Weight") 
+#adds trend line (data points fit if they predict weight perfectly)
+abline(0,1) 
+#gets average of square of residuals (MSE)
+mean((tree.pred-Weight.test)^2) 
+#ans = 56.91925
+sqrt(56.91925)
+```
+The square root of the MSE is 7.544485, which means that the test predictions are within about 7.54 kg of the true weights.
+
+##Pruning the decision tree to see if it will improve performance
+```{r}
+cv.skeletal=cv.tree(tree.skeletal)
+
+cv.skeletal$size
+cv.skeletal$dev 
+cv.skeletal$k
+cv.skeletal$method 
+
+```
+As we can see from the displayed results, the tree with 10 nodes actually has the lowest deviance and complexity. Despite this, we can test the data on the pruned tree with 9 nodes to see how it will come out.
+
+##Testing the data on a pruned tree with 9 nodes
+```{r}
+#pruning the tree to 9 nodes
+prune.skeletal=prune.tree(tree.skeletal,best=9)
+#changing data type for plot
+prune.skeletal2 <- rpart(prune.skeletal)
+prp(prune.skeletal2, roundint = FALSE) 
+```
+
+##Using the pruned tree model to predict the actual weights
+```{r}
+tree.pred.prune=predict(prune.skeletal,newdata=skeletal.test)
+#show test results in plot (actual vs predicted value)
+plot(tree.pred.prune,Weight.test, xlab = "Weight Prediction", ylab = "True Weight") 
+#adds trend line (data points fit if they predict weight perfectly)
+abline(0,1) 
+#gets average of square of residuals (MSE)
+mean((tree.pred.prune-Weight.test)^2) 
+#ans = 55.66756
+sqrt(55.66756)
+```
+We can see that the square root of the MSE is 7.46107, meaning that the test predictions are within about 7.46 kg of the true weights. This is slightly lower than the result we got with the original, unpruned tree: 7.54. We now test another method, boosted regresion tree, in order to see if this may yield us even better results.
+
+##Creating a boosted regression model that uses 5,000 trees
+```{r}
+boostedBones <- gbm(weight ~ ., skeletal.train[,-c(10,13)], distribution="gaussian",
+                    n.trees=5000, interaction.depth = 4)
+summary(boostedBones)
+```
+From the summary we see that the two most significant variables are when predicting weight are chest depth and chest diameter. We can create significance plots for these two variables
+```{r}
+#partial dependence plot for 2 most important variables
+par(mfrow = c(1,2))
+plot(boostedBones, i = "chest_depth")
+plot(boostedBones, i = "chest_diam")
+```
+
+##Using the boosted tree model to predict the actual weights
+```{r}
+tree.pred.boost <- predict(boostedBones, newdata = testData, n.trees = 5000)
+#show test results in plot (actual vs predicted value)
+plot(tree.pred.boost,Weight.test, xlab = "Weight Prediction", ylab = "True Weight") 
+#adds trend line (data points fit if they predict weight perfectly)
+abline(0,1) 
+#gets average of square of residuals (MSE)
+mean((tree.pred.boost-Weight.test)^2) 
+#MSE = 23.84935
+sqrt(23.84935) #4.88358
+```
+We can see that the square root of the MSE is 4.88358, meaning that the test predictions are within about 4.88kg of the true weights. This is significantly lower than the result we got with the original, unpruned tree: 7.54, and the pruned tree: 7.46 kg. The boosted model has a clear advantage in the accuracy of its predictions. Let's now look at how these results compared to an alternative method: KNN.
+
+
+##Creating the KNN model
+```{r}
+#picking the most significant predictors to use for the model and creating training/test ets for cross-validation
+train.knn=skeletal.train[,c(3,4,5,8,11)]
+test.knn=skeletal.test[,c(3,4,5,8,11)]
+
+train.knn.X<-train.knn[,-5]      
+test.knn.X<-test.knn[,-5]
+train.knn.Y<-train.knn$weight #vector of training weights
+test.knn.Y<-test.knn$weight #vector of test (actual) weights
+ 
+#using the KNN model to predict the actual weights
+knn.pred=knn(train.knn.X,test.knn.X,train.knn.Y,k=1)
+#show knn prediction against actual test weight
+plot(knn.pred,test.knn.Y)  
+#adds trend line
+abline(0,1) 
+
+#gets average of square of residuals (MSE)
+mean((as.numeric(knn.pred)-as.numeric(test.knn.Y))^2) 
+#MSE=1209.617
+sqrt(1209.617)
+```
+We can see that the square root of the MSE is 34.77955, meaning that the test predictions are within about 34.78kg of the true weights. This is significantly higher than all of the other error levels we have gotten, meaning that using decision trees is all-around a much more precise tecnhnique. To summarize, we have learned using our models that the bone structure of a person's chest is a very strong inticator for their weight. Some further questions to discuss are that of whether someone is then born with a chest structure suggesting the weight they will end up at, or if their chest grows with them in childhood. This would be a very interesting topic to examine further. If I had more time to investigate, I would also try and find a bigger sample in addition to playing around more with the zdifferent variables that ate used to predict the weight. 
+
